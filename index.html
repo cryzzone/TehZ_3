@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Библиотека — Безопасность БД</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #100820;
+    color: #ffffff;
+    min-height: 100vh;
+    padding: 28px 16px;
+  }
+
+  h1 { color: #ffd19d; font-size: 1.4rem; text-align: center; margin-bottom: 24px; }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
+  .user-badge {
+    background: #1a1030;
+    border: 1px solid #4d80c9;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.88rem;
+    color: #aeb5bd;
+  }
+
+  .user-badge strong { color: #ffd19d; }
+  .role-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 6px;
+  }
+  .role-admin     { background: #e93841; color: #fff; }
+  .role-librarian { background: #054494; color: #fff; }
+  .role-reader    { background: #511e43; color: #fff; }
+
+  .perms { font-size: 0.75rem; color: #aeb5bd; margin-top: 4px; }
+  .perm-on  { color: #5ae150; }
+  .perm-off { color: #823e2c; }
+
+  select, input {
+    background: #100820;
+    border: 1px solid #4d80c9;
+    border-radius: 6px;
+    color: #fff;
+    padding: 7px 10px;
+    font-size: 0.88rem;
+    outline: none;
+  }
+
+  select:focus, input:focus { border-color: #ffd19d; }
+
+  .tabs {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+
+  .tab {
+    padding: 8px 18px;
+    border-radius: 6px;
+    border: 1px solid #4d80c9;
+    background: transparent;
+    color: #aeb5bd;
+    cursor: pointer;
+    font-size: 0.88rem;
+    transition: all 0.2s;
+  }
+  .tab.active, .tab:hover { background: #054494; color: #fff; border-color: #054494; }
+
+  .panel {
+    background: #1a1030;
+    border: 1px solid #4d80c9;
+    border-radius: 10px;
+    padding: 22px 24px;
+    max-width: 960px;
+    margin: 0 auto 20px;
+  }
+
+  h2 { color: #ffd19d; font-size: 1rem; margin-bottom: 16px; }
+
+  .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: flex-end; }
+  .form-row input, .form-row select { flex: 1; min-width: 120px; }
+
+  button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-primary { background: #054494; color: #fff; }
+  .btn-primary:hover { background: #4d80c9; }
+  .btn-danger  { background: #823e2c; color: #fff; }
+  .btn-danger:hover  { background: #e93841; }
+  .btn-success { background: #1e8a4c; color: #fff; }
+  .btn-success:hover { background: #5ae150; color: #100820; }
+  .btn-warn    { background: #f1892d; color: #100820; }
+  .btn-warn:hover { background: #ffd19d; }
+
+  .msg { font-size: 0.82rem; margin-bottom: 10px; min-height: 18px; }
+  .msg-ok  { color: #5ae150; }
+  .msg-err { color: #e93841; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  thead th { color: #aeb5bd; padding: 7px 10px; border-bottom: 1px solid #2a2050; text-align: left; font-weight: 500; }
+  tbody tr:hover { background: #1e1540; }
+  td { padding: 8px 10px; border-bottom: 1px solid #1e1540; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  .badge-ret  { color: #5ae150; font-size: 0.78rem; }
+  .badge-open { color: #f1892d; font-size: 0.78rem; }
+
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .perm-table td:first-child { color: #aeb5bd; }
+</style>
+</head>
+<body>
+
+<h1>Библиотека — Защита БД и контроль целостности</h1>
+
+<div class="top-bar">
+  <div class="user-badge">
+    Пользователь: <strong id="cur-user">—</strong>
+    <span id="cur-role-tag" class="role-tag"></span>
+    <div class="perms" id="cur-perms"></div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <select id="user-select"></select>
+    <button class="btn-primary" id="btn-switch">Войти</button>
+  </div>
+  <button class="btn-warn" id="btn-backup">Резервная копия</button>
+  <span id="backup-msg" class="msg"></span>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="books">Книги</button>
+  <button class="tab" data-tab="loans">Выдача</button>
+  <button class="tab" data-tab="audit">Журнал аудита</button>
+  <button class="tab" data-tab="roles">Роли и права</button>
+</div>
+
+<!-- КНИГИ -->
+<div class="section active" id="tab-books">
+  <div class="panel">
+    <h2>Добавить книгу</h2>
+    <div class="form-row">
+      <input id="b-title" placeholder="Название">
+      <select id="b-author"></select>
+      <input id="b-year" type="number" placeholder="Год" style="max-width:90px">
+      <input id="b-copies" type="number" placeholder="Экз." value="1" style="max-width:70px">
+      <button class="btn-primary" id="btn-add-book">Добавить</button>
+    </div>
+    <div class="msg" id="book-msg"></div>
+  </div>
+  <div class="panel">
+    <h2>Список книг</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Название</th><th>Автор</th><th>Год</th><th>Экз.</th><th></th></tr></thead>
+      <tbody id="books-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ВЫДАЧА -->
+<div class="section" id="tab-loans">
+  <div class="panel">
+    <h2>Выдать книгу</h2>
+    <div class="form-row">
+      <select id="l-book"></select>
+      <select id="l-member"></select>
+      <button class="btn-primary" id="btn-add-loan">Выдать</button>
+    </div>
+    <div class="msg" id="loan-msg"></div>
+  </div>
+  <div class="panel">
+    <h2>Активные выдачи</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Книга</th><th>Читатель</th><th>Выдана</th><th>Возврат</th><th></th></tr></thead>
+      <tbody id="loans-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- АУДИТ -->
+<div class="section" id="tab-audit">
+  <div class="panel">
+    <h2>Журнал изменений (последние 50)</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Таблица</th><th>Действие</th><th>Запись</th><th>Время</th><th>Было</th><th>Стало</th></tr></thead>
+      <tbody id="audit-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- РОЛИ -->
+<div class="section" id="tab-roles">
+  <div class="panel">
+    <h2>Пользователи и роли</h2>
+    <table class="perm-table">
+      <thead><tr><th>Пользователь</th><th>Роль</th><th>SELECT</th><th>INSERT</th><th>UPDATE</th><th>DELETE</th></tr></thead>
+      <tbody id="roles-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+let perms = {};
+
+function setMsg(id, text, ok) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+}
+
+async function loadMe() {
+  const data = await fetch('/me').then(r => r.json());
+  perms = data;
+  document.getElementById('cur-user').textContent = data.username || '—';
+  const tag = document.getElementById('cur-role-tag');
+  tag.textContent = data.role || '';
+  tag.className = 'role-tag role-' + (data.role || '');
+  const p = document.getElementById('cur-perms');
+  const f = (v, label) => `<span class="${v ? 'perm-on' : 'perm-off'}">${label}</span>`;
+  p.innerHTML = [
+    f(data.can_select,'SELECT'), f(data.can_insert,'INSERT'),
+    f(data.can_update,'UPDATE'), f(data.can_delete,'DELETE')
+  ].join(' ');
+}
+
+async function loadUsers() {
+  const users = await fetch('/db_users').then(r => r.json());
+  const sel = document.getElementById('user-select');
+  sel.innerHTML = users.map(u => `<option value="${u.username}">${u.username} (${u.role})</option>`).join('');
+}
+
+document.getElementById('btn-switch').addEventListener('click', async () => {
+  const username = document.getElementById('user-select').value;
+  const res = await fetch('/switch_user', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({username})
+  });
+  if (res.ok) { await loadMe(); loadAll(); }
+});
+
+document.getElementById('btn-backup').addEventListener('click', async () => {
+  const res = await fetch('/backup', {method:'POST'});
+  const d = await res.json();
+  const el = document.getElementById('backup-msg');
+  if (res.ok) { el.textContent = 'Создан: ' + d.file; el.className = 'msg msg-ok'; }
+  else        { el.textContent = d.error; el.className = 'msg msg-err'; }
+});
+
+// --- вкладки ---
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'audit') loadAudit();
+    if (btn.dataset.tab === 'roles') loadRoles();
+  });
+});
+
+// --- книги ---
+async function loadAuthors() {
+  const data = await fetch('/authors').then(r => r.json());
+  if (data.error) return;
+  const sel = document.getElementById('b-author');
+  sel.innerHTML = data.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+}
+
+async function loadBooks() {
+  const res = await fetch('/books');
+  const data = await res.json();
+  if (data.error) { document.getElementById('books-tbody').innerHTML = `<tr><td colspan="6" style="color:#e93841">${data.error}</td></tr>`; return; }
+  const lsel = document.getElementById('l-book');
+  lsel.innerHTML = data.map(b => `<option value="${b.id}">${b.title} (${b.copies} экз.)</option>`).join('');
+  document.getElementById('books-tbody').innerHTML = data.map(b => `
+    <tr>
+      <td>${b.id}</td><td>${esc(b.title)}</td><td>${esc(b.author)}</td>
+      <td>${b.year ?? '—'}</td><td>${b.copies}</td>
+      <td><button class="btn-danger btn-del-book" data-id="${b.id}">Удалить</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:#aeb5bd;text-align:center;padding:16px">Нет книг</td></tr>';
+
+  document.querySelectorAll('.btn-del-book').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const res = await fetch(`/books/${btn.dataset.id}`, {method:'DELETE'});
+      const d = await res.json();
+      if (!res.ok) { setMsg('book-msg', d.error, false); return; }
+      setMsg('book-msg', 'Книга удалена', true);
+      loadBooks();
+    });
+  });
+}
+
+document.getElementById('btn-add-book').addEventListener('click', async () => {
+  const body = {
+    title: document.getElementById('b-title').value,
+    author_id: document.getElementById('b-author').value,
+    year: document.getElementById('b-year').value || null,
+    copies: document.getElementById('b-copies').value || 1
+  };
+  const res = await fetch('/books', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const d = await res.json();
+  if (!res.ok) { setMsg('book-msg', d.error, false); return; }
+  setMsg('book-msg', 'Книга добавлена', true);
+  document.getElementById('b-title').value = '';
+  loadBooks();
+});
+
+// --- выдача ---
+async function loadMembers() {
+  const data = await fetch('/members').then(r => r.json());
+  if (data.error) return;
+  const sel = document.getElementById('l-member');
+  sel.innerHTML = data.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+}
+
+async function loadLoans() {
+  const res = await fetch('/loans');
+  const data = await res.json();
+  if (data.error) { document.getElementById('loans-tbody').innerHTML = `<tr><td colspan="6" style="color:#e93841">${data.error}</td></tr>`; return; }
+  document.getElementById('loans-tbody').innerHTML = data.map(l => `
+    <tr>
+      <td>${l.id}</td><td>${esc(l.title)}</td><td>${esc(l.member)}</td>
+      <td>${l.loaned_at}</td>
+      <td>${l.returned_at ? `<span class="badge-ret">${l.returned_at}</span>` : '<span class="badge-open">активна</span>'}</td>
+      <td>${!l.returned_at ? `<button class="btn-success btn-return" data-id="${l.id}">Вернуть</button>` : ''}</td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:#aeb5bd;text-align:center;padding:16px">Нет выдач</td></tr>';
+
+  document.querySelectorAll('.btn-return').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const res = await fetch(`/loans/${btn.dataset.id}/return`, {method:'POST'});
+      const d = await res.json();
+      if (!res.ok) { setMsg('loan-msg', d.error, false); return; }
+      setMsg('loan-msg', 'Книга возвращена', true);
+      loadLoans(); loadBooks();
+    });
+  });
+}
+
+document.getElementById('btn-add-loan').addEventListener('click', async () => {
+  const body = {
+    book_id: document.getElementById('l-book').value,
+    member_id: document.getElementById('l-member').value
+  };
+  const res = await fetch('/loans', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const d = await res.json();
+  if (!res.ok) { setMsg('loan-msg', d.error, false); return; }
+  setMsg('loan-msg', 'Книга выдана', true);
+  loadLoans(); loadBooks();
+});
+
+// --- аудит ---
+async function loadAudit() {
+  const res = await fetch('/audit');
+  const data = await res.json();
+  if (data.error) { document.getElementById('audit-tbody').innerHTML = `<tr><td colspan="7" style="color:#e93841">${data.error}</td></tr>`; return; }
+  const colors = {INSERT:'#5ae150', UPDATE:'#ffd19d', DELETE:'#e93841'};
+  document.getElementById('audit-tbody').innerHTML = data.map(r => `
+    <tr>
+      <td>${r.id}</td><td>${r.tbl}</td>
+      <td style="color:${colors[r.action]||'#fff'}">${r.action}</td>
+      <td>${r.record_id ?? '—'}</td><td>${r.changed_at}</td>
+      <td style="color:#aeb5bd;font-size:0.78rem">${esc(r.old_data ?? '—')}</td>
+      <td style="font-size:0.78rem">${esc(r.new_data ?? '—')}</td>
+    </tr>`).join('') || '<tr><td colspan="7" style="color:#aeb5bd;text-align:center;padding:16px">Журнал пуст</td></tr>';
+}
+
+// --- роли ---
+async function loadRoles() {
+  const data = await fetch('/db_users').then(r => r.json());
+  const perm = (v) => v ? '<span style="color:#5ae150">да</span>' : '<span style="color:#823e2c">нет</span>';
+  // нужны права из ролей — получим через /me для каждого... проще захардкодить из известных ролей
+  const rolePerms = {
+    admin:     [1,1,1,1],
+    librarian: [1,1,1,0],
+    reader:    [1,0,0,0]
+  };
+  document.getElementById('roles-tbody').innerHTML = data.map(u => {
+    const p = rolePerms[u.role] || [0,0,0,0];
+    return `<tr>
+      <td>${esc(u.username)}</td>
+      <td><span class="role-tag role-${u.role}">${u.role}</span></td>
+      <td>${perm(p[0])}</td><td>${perm(p[1])}</td><td>${perm(p[2])}</td><td>${perm(p[3])}</td>
+    </tr>`;
+  }).join('');
+}
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function loadAll() {
+  await loadAuthors();
+  await loadBooks();
+  await loadMembers();
+  await loadLoans();
+}
+
+loadMe();
+loadUsers();
+loadAll();
+</script>
+</body>
+</html>
